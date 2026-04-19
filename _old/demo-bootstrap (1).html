@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offsetter.js — Bootstrap Demo</title>
+
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+
+    <style>
+
+        /* ── Offsetter CSS contract ──────────────────────────────────────
+           Все sticky top значения — через Offsetter переменные.
+           Ни одного хардкода в px для позиционирования.
+           Fallback-значения в :root держат страницу рабочей без JS
+           и на первом кадре до того как Offsetter пересчитает.
+        ─────────────────────────────────────────────────────────────────── */
+
+        :root {
+            /* header — 56px fixed */
+            --offsetter-header-height:       56px;
+            --offsetter-header-top:           0px;
+            --offsetter-header-bottom:        56px;
+
+            /* promo-banner — ~36px sticky под хедером */
+            --offsetter-promo-banner-height:  36px;
+            --offsetter-promo-banner-top:     56px;
+            --offsetter-promo-banner-bottom:  92px;
+
+            /* pill-nav — ~46px sticky под хедером + промо */
+            --offsetter-pill-nav-height:      46px;
+            --offsetter-pill-nav-top:         92px;
+            --offsetter-pill-nav-bottom:     138px;
+
+            /* глобальные */
+            --offsetter-total:               138px;
+            --offsetter-scroll-margin:       158px;
+
+            /* bottom-bar — excluded, не суммируется */
+            --offsetter-bottom-bar-height:     0px;
+        }
+
+        /* Фиксированный хедер выталкивает контент вниз */
+        body {
+            padding-top: var(--offsetter-header-bottom, 56px);
+        }
+
+        /* Контент не уходит под bottom bar на мобильном */
+        body.has-bottom-bar {
+            padding-bottom: var(--offsetter-bottom-bar-height, 0px);
+        }
+
+        /* LAYER 0 — header: position fixed, не участвует в flow */
+        .site-header {
+            position: fixed;
+            top: 0;
+            inset-inline: 0;
+            z-index: 300;
+        }
+
+        /* LAYER 1 — promo banner: sticky под хедером */
+        .promo-banner {
+            position: sticky;
+            top: var(--offsetter-promo-banner-top);
+            z-index: 200;
+            max-height: 80px;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .promo-banner.is-dismissed {
+            max-height: 0;
+            padding-block: 0 !important;
+        }
+
+        /* LAYER 2 — pill-nav: sticky под хедером + промо */
+        .pill-nav {
+            position: sticky;
+            top: var(--offsetter-pill-nav-top);
+            z-index: 100;
+        }
+
+        /* Sticky галерея — только под хедером, не под pill-nav */
+        .product-gallery {
+            position: sticky;
+            top: var(--offsetter-header-bottom);
+        }
+
+        /* Якорные секции — scroll-margin учитывает весь sticky-стек */
+        [data-offsetter-anchor] {
+            scroll-margin-top: var(--offsetter-scroll-margin);
+        }
+
+        /* Mobile bottom bar */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            inset-inline: 0;
+            z-index: 300;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .bottom-bar.is-visible {
+            transform: translateY(0);
+        }
+
+        /* Pill-nav pills */
+        .nav-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 16px;
+            border-radius: 999px;
+            font-size: .8125rem;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--bs-secondary-color);
+            background: var(--bs-tertiary-bg);
+            border: 1.5px solid transparent;
+            transition: background .15s, color .15s, border-color .15s;
+        }
+
+        .nav-pill:hover {
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
+        }
+
+        .nav-pill.is-active {
+            background: var(--bs-primary);
+            color: #fff;
+            border-color: var(--bs-primary);
+        }
+
+        /* Секции контента */
+        .content-section {
+            min-height: 70vh;
+            padding-block: 3rem;
+        }
+
+        /* Material Symbols helper */
+        .ms {
+            font-family: 'Material Symbols Rounded';
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 1.1em;
+            vertical-align: -0.2em;
+            line-height: 1;
+            display: inline-block;
+        }
+
+        /* Inspector panel */
+        .inspector {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            width: 280px;
+            background: #fff;
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.12);
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: .7rem;
+            z-index: 9999;
+            transition: transform .25s ease, opacity .25s ease;
+        }
+
+        .inspector.is-hidden {
+            transform: translateY(calc(100% + 1.5rem));
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .inspector-header {
+            padding: .5rem .75rem;
+            background: var(--bs-primary);
+            color: #fff;
+            border-radius: 9px 9px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .inspector-body {
+            padding: .625rem .75rem;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .inspector-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: .25rem;
+            padding: .15rem 0;
+            border-bottom: 1px solid var(--bs-border-color-translucent);
+        }
+
+        .inspector-row:last-child { border-bottom: none; }
+
+        .inspector-var { color: var(--bs-secondary-color); }
+        .inspector-val { color: var(--bs-success); font-weight: 600; }
+        .inspector-val.changed { color: var(--bs-warning-text-emphasis); }
+
+        .inspector-total {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: .25rem;
+            padding: .4rem 0 .1rem;
+            border-top: 1.5px solid var(--bs-border-color);
+            margin-top: .25rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+        }
+
+        .pulse {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #3ddc97;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(61,220,151,.5); }
+            70%  { box-shadow: 0 0 0 5px rgba(61,220,151,0); }
+            100% { box-shadow: 0 0 0 0 rgba(61,220,151,0); }
+        }
+
+    </style>
+</head>
+<body>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 0 — HEADER  (position: fixed)
+         data-offsetter-role="header"
+         Генерирует: --offsetter-header-height, -top (0px), -bottom
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <header class="site-header bg-white border-bottom shadow-sm" data-offsetter-role="header">
+        <div class="container d-flex align-items-center justify-content-between" style="height:56px">
+
+            <a class="navbar-brand fw-bold text-primary mb-0 h1" href="#">
+                <span class="ms">storefront</span> MyStore
+            </a>
+
+            <nav class="d-none d-md-flex gap-1">
+                <a href="#details"        class="btn btn-sm btn-light">Details</a>
+                <a href="#specifications" class="btn btn-sm btn-light">Specs</a>
+                <a href="#reviews"        class="btn btn-sm btn-light">Reviews</a>
+                <a href="#gallery"        class="btn btn-sm btn-light">Gallery</a>
+            </nav>
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="inspector-toggle">
+                    <span class="ms" style="font-size:.9em">monitoring</span> Inspector
+                </button>
+                <a href="#" class="btn btn-sm btn-primary">
+                    <span class="ms">shopping_cart</span> Cart (0)
+                </a>
+            </div>
+
+        </div>
+    </header>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 1 — PROMO BANNER  (position: sticky)
+         data-offsetter-role="promo-banner"
+         top: var(--offsetter-promo-banner-top) = header-bottom
+         При dismiss: offsetHeight → 0 → ResizeObserver → пересчёт
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div class="promo-banner bg-warning-subtle border-bottom py-2"
+         data-offsetter-role="promo-banner"
+         id="promo-banner">
+        <div class="container d-flex align-items-center justify-content-center gap-3">
+            <span class="badge bg-warning text-dark">Today only</span>
+            <span class="small fw-semibold">
+                <span class="ms text-warning">local_shipping</span>
+                Free shipping on all orders · Use code <strong>OFFSET10</strong>
+            </span>
+            <button class="btn-close btn-close ms-auto" style="font-size:.65rem"
+                    id="promo-dismiss" aria-label="Dismiss"></button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 2 — PILL NAV  (position: sticky)
+         data-offsetter-role="pill-nav"
+         top: var(--offsetter-pill-nav-top) = header + promo
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <nav class="pill-nav bg-body border-bottom" data-offsetter-role="pill-nav" aria-label="Product sections">
+        <div class="container">
+            <div class="d-flex gap-2 py-2 overflow-x-auto" style="scrollbar-width:none">
+                <a class="nav-pill is-active" href="#details"        data-pill-target="details">
+                    <span class="ms">info</span> Details
+                </a>
+                <a class="nav-pill" href="#specifications" data-pill-target="specifications">
+                    <span class="ms">memory</span> Specifications
+                </a>
+                <a class="nav-pill" href="#reviews"         data-pill-target="reviews">
+                    <span class="ms">star</span> Reviews
+                </a>
+                <a class="nav-pill" href="#gallery"         data-pill-target="gallery">
+                    <span class="ms">photo_library</span> Gallery
+                </a>
+            </div>
+        </div>
+    </nav>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         MAIN CONTENT
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <main>
+        <div class="container py-4">
+            <div class="row g-4">
+
+
+                <!-- ── LEFT: sticky gallery ──────────────────────────── -->
+
+                <div class="col-lg-5">
+                    <div class="product-gallery">
+
+                        <!-- Главное фото -->
+                        <img src="https://picsum.photos/seed/phone/800/600"
+                             class="img-fluid rounded-3 w-100 shadow-sm mb-3"
+                             alt="Product main photo">
+
+                        <!-- Превью -->
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/phone2/400/400"
+                                     class="img-fluid rounded-2 w-100" alt="View 1">
+                            </div>
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/phone3/400/400"
+                                     class="img-fluid rounded-2 w-100" alt="View 2">
+                            </div>
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/phone4/400/400"
+                                     class="img-fluid rounded-2 w-100" alt="View 3">
+                            </div>
+                        </div>
+
+                        <!-- Purchase box -->
+                        <div class="card mt-3 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-baseline mb-1">
+                                    <span class="text-body-secondary small text-decoration-line-through">$899.99</span>
+                                    <span class="badge bg-success">Save 17%</span>
+                                </div>
+                                <div class="fs-2 fw-bold text-danger mb-3">$749.99</div>
+                                <div class="alert alert-info py-2 small mb-3">
+                                    <span class="ms">local_shipping</span>
+                                    <strong>FREE delivery</strong> Monday, Feb 19
+                                </div>
+                                <p class="text-success small mb-3">
+                                    <span class="ms">check_circle</span> In Stock
+                                </p>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-primary btn-lg" id="add-to-cart-btn">
+                                        <span class="ms me-1">shopping_cart</span>Add to Cart
+                                    </button>
+                                    <button class="btn btn-outline-secondary">
+                                        <span class="ms me-1">favorite_border</span>Add to Wishlist
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+
+                <!-- ── RIGHT: content sections ───────────────────────── -->
+
+                <div class="col-lg-7">
+
+                    <!-- § DETAILS ──────────────────────────────────── -->
+                    <section id="details"
+                             class="content-section"
+                             data-offsetter-anchor
+                             data-spy-section>
+
+                        <h2 class="mb-4">Product Details</h2>
+
+                        <p class="text-body-secondary mb-4">
+                            AuraPhone Pro is a flagship device that combines elegant design,
+                            incredible performance, and an advanced AI camera system.
+                        </p>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-sm-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <span class="ms text-primary">monitor</span> Display
+                                        </h6>
+                                        <p class="card-text small text-body-secondary">
+                                            6.7" ProMotion OLED · 120Hz · HDR10+
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <span class="ms text-success">memory</span> Processor
+                                        </h6>
+                                        <p class="card-text small text-body-secondary">
+                                            A18 Bionic · 8-core GPU · 16-core Neural Engine
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <span class="ms text-danger">photo_camera</span> Camera
+                                        </h6>
+                                        <p class="card-text small text-body-secondary">
+                                            Triple 48MP · 3× optical zoom · LiDAR
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <span class="ms text-warning">battery_charging_full</span> Battery
+                                        </h6>
+                                        <p class="card-text small text-body-secondary">
+                                            28 hrs video · 15W MagSafe · Fast charge
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <span class="ms">inventory_2</span> What's in the Box
+                            </div>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item small">
+                                    <span class="ms text-success me-2">check_circle</span>AuraPhone Pro
+                                </li>
+                                <li class="list-group-item small">
+                                    <span class="ms text-success me-2">check_circle</span>USB-C to USB-C Cable
+                                </li>
+                                <li class="list-group-item small">
+                                    <span class="ms text-success me-2">check_circle</span>SIM Ejector Tool
+                                </li>
+                                <li class="list-group-item small">
+                                    <span class="ms text-success me-2">check_circle</span>2-Year Warranty Card
+                                </li>
+                            </ul>
+                        </div>
+
+                    </section>
+
+
+                    <!-- § SPECIFICATIONS ────────────────────────────── -->
+                    <section id="specifications"
+                             class="content-section border-top"
+                             data-offsetter-anchor
+                             data-spy-section>
+
+                        <h2 class="mb-4">Technical Specifications</h2>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-bordered align-middle">
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-semibold" style="width:35%">Display</td>
+                                        <td class="small">6.7" OLED · 2796×1290 · 120Hz · HDR10+ · 2000 nits</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Processor</td>
+                                        <td class="small">A18 Bionic · 6-core CPU · 8-core GPU · 16-core NPU</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">RAM</td>
+                                        <td class="small">12 GB LPDDR5</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Storage</td>
+                                        <td class="small">256 GB / 512 GB / 1 TB NVMe</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Main Camera</td>
+                                        <td class="small">48MP wide f/1.78 + 12MP ultrawide + 12MP 3× telephoto</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Battery</td>
+                                        <td class="small">28 hrs video · MagSafe 15W · Fast charge 50% in 30 min</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Connectivity</td>
+                                        <td class="small">5G · Wi-Fi 7 · Bluetooth 5.4 · UWB · NFC</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Dimensions</td>
+                                        <td class="small">159.9 × 76.7 × 8.25 mm · 221 g</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Water resistance</td>
+                                        <td class="small">IP68 · 6 m · 30 min</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">Materials</td>
+                                        <td class="small">Titanium frame · Ceramic Shield · Matte glass back</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="alert alert-info small">
+                            <span class="ms me-1">info</span>
+                            Specifications subject to change without notice.
+                        </div>
+
+                    </section>
+
+
+                    <!-- § REVIEWS ───────────────────────────────────── -->
+                    <section id="reviews"
+                             class="content-section border-top"
+                             data-offsetter-anchor
+                             data-spy-section>
+
+                        <h2 class="mb-4">Customer Reviews</h2>
+
+                        <div class="d-flex align-items-center gap-3 mb-4">
+                            <span class="display-5 fw-bold">4.5</span>
+                            <div>
+                                <div class="text-warning fs-5">★★★★½</div>
+                                <div class="text-body-secondary small">20,589 ratings</div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <strong>Incredible device</strong>
+                                    <span class="text-warning">★★★★★</span>
+                                </div>
+                                <p class="small text-body-secondary mb-1">
+                                    Best phone I've owned. Camera is unreal, battery lasts two days.
+                                </p>
+                                <small class="text-body-secondary">— Sarah K. · Verified Purchase</small>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <strong>Great but pricey</strong>
+                                    <span class="text-warning">★★★★</span>
+                                </div>
+                                <p class="small text-body-secondary mb-1">
+                                    Performance is flawless. Would give 5 stars if the price were lower.
+                                </p>
+                                <small class="text-body-secondary">— Marcus T. · Verified Purchase</small>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <strong>Titanium is worth it</strong>
+                                    <span class="text-warning">★★★★★</span>
+                                </div>
+                                <p class="small text-body-secondary mb-1">
+                                    Feels premium in hand, photos are stunning in any lighting.
+                                </p>
+                                <small class="text-body-secondary">— Olena V. · Verified Purchase</small>
+                            </div>
+                        </div>
+
+                    </section>
+
+
+                    <!-- § GALLERY ───────────────────────────────────── -->
+                    <section id="gallery"
+                             class="content-section border-top"
+                             data-offsetter-anchor
+                             data-spy-section>
+
+                        <h2 class="mb-4">Gallery</h2>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <img src="https://picsum.photos/seed/gallery0/1200/500"
+                                     class="img-fluid rounded-3 w-100" alt="Hero shot" loading="lazy">
+                            </div>
+                            <div class="col-6">
+                                <img src="https://picsum.photos/seed/gallery1/600/400"
+                                     class="img-fluid rounded-3 w-100" alt="Detail 1" loading="lazy">
+                            </div>
+                            <div class="col-6">
+                                <img src="https://picsum.photos/seed/gallery2/600/400"
+                                     class="img-fluid rounded-3 w-100" alt="Detail 2" loading="lazy">
+                            </div>
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/gallery3/400/400"
+                                     class="img-fluid rounded-3 w-100" alt="Detail 3" loading="lazy">
+                            </div>
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/gallery4/400/400"
+                                     class="img-fluid rounded-3 w-100" alt="Detail 4" loading="lazy">
+                            </div>
+                            <div class="col-4">
+                                <img src="https://picsum.photos/seed/gallery5/400/400"
+                                     class="img-fluid rounded-3 w-100" alt="Detail 5" loading="lazy">
+                            </div>
+                        </div>
+
+                    </section>
+
+                </div><!-- /col-lg-7 -->
+            </div><!-- /row -->
+        </div><!-- /container -->
+    </main>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EXCLUDED LAYER — MOBILE BOTTOM BAR
+         data-offsetter-exclude: высота измеряется, но НЕ суммируется в
+         --offsetter-total и не сдвигает pill-nav.
+         CSS-переменная --offsetter-bottom-bar-height доступна для
+         body { padding-bottom }.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div class="bottom-bar border-top bg-white shadow d-lg-none"
+         data-offsetter-role="bottom-bar"
+         data-offsetter-exclude
+         id="bottom-bar">
+        <div class="container d-flex align-items-center gap-2 py-2">
+            <div class="flex-grow-1">
+                <div class="small fw-semibold">AuraPhone Pro Titanium</div>
+                <div class="text-danger fw-bold">$749.99</div>
+            </div>
+            <button class="btn btn-primary">
+                <span class="ms">shopping_cart</span> Add to Cart
+            </button>
+            <button class="btn btn-outline-secondary">
+                <span class="ms">favorite_border</span>
+            </button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         INSPECTOR PANEL — live CSS variables viewer
+         Обновляется при каждом 'offsetter:change'
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div class="inspector is-hidden" id="inspector">
+        <div class="inspector-header">
+            <span class="fw-bold" style="font-size:.7rem;letter-spacing:.06em">
+                OFFSETTER INSPECTOR
+            </span>
+            <span class="pulse" id="inspector-pulse"></span>
+        </div>
+        <div class="inspector-body" id="inspector-body">
+            <span class="text-body-secondary">Loading…</span>
+        </div>
+    </div>
+
+
+    <!-- Scripts ──────────────────────────────────────────────────────────── -->
+
+    <!--
+        Bootstrap JS — defer, нет зависимостей от Offsetter
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
+
+    <!--
+        Offsetter.js — defer, должен быть ДО app-script в DOM-порядке.
+        defer гарантирует: Offsetter.js выполнится раньше чем следующий
+        defer-script, потому что он стоит выше в разметке.
+    -->
+    <script src="Offsetter.js" defer></script>
+
+    <!--
+        App script — defer.
+        К моменту выполнения window.Offsetter уже определён и инициализирован.
+    -->
+    <script defer>
+    /* ════════════════════════════════════════════════════════════════════
+       APPLICATION SCRIPT — Bootstrap Light Demo
+
+       Паттерны интеграции с Offsetter:
+         1. CSS contract     — sticky top, scroll-margin через var()
+                               (позиционирование без JS вообще)
+         2. JS API           — Offsetter.getScrollMargin() для scroll-spy
+         3. Event listener   — 'offsetter:change' для реактивных обновлений
+       ════════════════════════════════════════════════════════════════════ */
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // Перезапускаем Offsetter с polling — ловит CSS-transitions (промо dismiss,
+        // аккордеоны и т.д.) которые ResizeObserver может пропустить.
+        // destroy() + init() безопасны — флаг initialised сбрасывается в destroy().
+        if (window.Offsetter) {
+            Offsetter.destroy();
+            Offsetter.init({ pollingInterval: 500 });
+        }
+
+
+        /* ── 1. INSPECTOR ───────────────────────────────────────────────
+           Рендерит живую таблицу CSS-переменных после каждого пересчёта.
+           Читает из getComputedStyle — показывает то, что видит браузер.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const inspectorEl    = document.getElementById('inspector');
+        const inspectorBody  = document.getElementById('inspector-body');
+        const inspectorPulse = document.getElementById('inspector-pulse');
+        const inspectorToggle = document.getElementById('inspector-toggle');
+        const prevValues = {};
+
+        function renderInspector(detail) {
+            if (!inspectorBody) return;
+
+            const cs  = getComputedStyle(document.documentElement);
+            const get = name => cs.getPropertyValue(name).trim() || '—';
+            const roles = [];
+            if (detail?.layers) detail.layers.forEach((_, role) => roles.push(role));
+
+            let html = '';
+
+            for (const role of roles) {
+                html += `<div class="text-primary fw-semibold mt-2 mb-1" style="font-size:.6rem;letter-spacing:.1em;text-transform:uppercase">${role}</div>`;
+
+                for (const suffix of ['height', 'top', 'bottom']) {
+                    const varName = `--offsetter-${role}-${suffix}`;
+                    const value   = get(varName);
+                    const changed = prevValues[varName] && prevValues[varName] !== value;
+                    prevValues[varName] = value;
+
+                    html += `
+                    <div class="inspector-row">
+                        <div class="inspector-var">--offsetter-<span style="color:#0d6efd">${role}</span>-${suffix}</div>
+                        <div class="inspector-val ${changed ? 'changed' : ''}">${value}</div>
+                    </div>`;
+                }
+            }
+
+            for (const [name, label] of [
+                ['--offsetter-total',         'total'],
+                ['--offsetter-scroll-margin', 'scroll-margin'],
+            ]) {
+                html += `
+                <div class="inspector-total">
+                    <div>--offsetter-${label}</div>
+                    <div>${get(name)}</div>
+                </div>`;
+            }
+
+            inspectorBody.innerHTML = html;
+
+            // Пульс при обновлении
+            inspectorPulse.style.background = '#f5a623';
+            setTimeout(() => { inspectorPulse.style.background = '#3ddc97'; }, 400);
+            setTimeout(() => {
+                inspectorBody.querySelectorAll('.changed').forEach(el => el.classList.remove('changed'));
+            }, 800);
+        }
+
+        inspectorToggle?.addEventListener('click', () => {
+            inspectorEl.classList.toggle('is-hidden');
+        });
+
+        document.addEventListener('offsetter:change', ({ detail }) => {
+            renderInspector(detail);
+        });
+
+        // Первый рендер — Offsetter мог уже выстрелить до регистрации listener
+        renderInspector({ layers: window.Offsetter
+            ? new Map(Array.from(document.querySelectorAll('[data-offsetter-role]'))
+                .map(el => [el.dataset.offsetterRole, {}]))
+            : new Map()
+        });
+
+
+        /* ── 2. PROMO BANNER DISMISS ─────────────────────────────────────
+           CSS max-height transition сворачивает баннер.
+           ResizeObserver в Offsetter поймает изменение offsetHeight → 0
+           и пересчитает все переменные. pill-nav сдвинется вверх.
+           Никакого ручного Offsetter.recalculate() не нужно.
+        ─────────────────────────────────────────────────────────────────── */
+
+        document.getElementById('promo-dismiss')?.addEventListener('click', () => {
+            document.getElementById('promo-banner')?.classList.add('is-dismissed');
+        });
+
+
+        /* ── 3. SCROLL-SPY ──────────────────────────────────────────────
+           spyThreshold = Offsetter.getScrollMargin() — живое значение.
+           Обновляется через 'offsetter:change' при dismiss промо или ресайзе.
+           Заменяет хардкод типа (top - 150).
+        ─────────────────────────────────────────────────────────────────── */
+
+        const pills    = document.querySelectorAll('.nav-pill[data-pill-target]');
+        const sections = document.querySelectorAll('[data-spy-section]');
+
+        let spyThreshold = (window.Offsetter?.getScrollMargin?.()) ?? 80;
+
+        document.addEventListener('offsetter:change', ({ detail }) => {
+            spyThreshold = detail.scrollMargin;
+        });
+
+        pills.forEach(pill => {
+            pill.addEventListener('click', e => {
+                e.preventDefault();
+                const target = document.getElementById(pill.dataset.pillTarget);
+                // scrollIntoView учитывает scroll-margin-top из CSS —
+                // никакой ручной математики не нужно
+                target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        function updateActivePill() {
+            let current = '';
+            const scrollY = window.scrollY;
+
+            sections.forEach(section => {
+                const top = section.getBoundingClientRect().top + scrollY;
+                if (scrollY >= top - spyThreshold) current = section.id;
+            });
+
+            pills.forEach(pill => {
+                pill.classList.toggle('is-active', pill.dataset.pillTarget === current);
+            });
+        }
+
+        window.addEventListener('scroll', updateActivePill, { passive: true });
+        updateActivePill();
+
+
+        /* ── 4. MOBILE BOTTOM BAR ────────────────────────────────────────
+           Появляется когда галерея уходит за верхний край вьюпорта.
+           padding-bottom на body — через CSS var(--offsetter-bottom-bar-height),
+           которую Offsetter пишет т.к. bottom-bar имеет data-offsetter-exclude.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const bottomBar = document.getElementById('bottom-bar');
+        const gallery   = document.querySelector('.product-gallery');
+
+        function updateBottomBar() {
+            if (!gallery || !bottomBar) return;
+            const past = gallery.getBoundingClientRect().bottom < 0;
+            bottomBar.classList.toggle('is-visible', past);
+            document.body.classList.toggle('has-bottom-bar', past);
+        }
+
+        window.addEventListener('scroll', updateBottomBar, { passive: true });
+        updateBottomBar();
+
+
+    }); // DOMContentLoaded
+    </script>
+
+</body>
+</html>

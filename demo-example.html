@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offsetter.js — Live Demo</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+
+    <style>
+
+        /* ════════════════════════════════════════════════════════════════
+           DESIGN TOKENS
+           ════════════════════════════════════════════════════════════════ */
+
+        :root {
+            --c-bg:          #0d0f14;
+            --c-surface:     #151820;
+            --c-surface-2:   #1c2030;
+            --c-border:      #252a3a;
+            --c-border-2:    #2e3548;
+            --c-text:        #e8eaf0;
+            --c-text-muted:  #6b7494;
+            --c-text-dim:    #3d4460;
+            --c-accent:      #4f8fff;
+            --c-accent-glow: rgba(79, 143, 255, 0.18);
+            --c-accent-2:    #7c5cff;
+            --c-green:       #3ddc97;
+            --c-amber:       #f5a623;
+            --c-red:         #ff5f5f;
+            --c-promo:       #1a1600;
+            --c-promo-text:  #f5a623;
+
+            --f-display: 'Syne', sans-serif;
+            --f-body:    'Lora', serif;
+            --f-mono:    'JetBrains Mono', monospace;
+
+            --radius:    8px;
+            --radius-lg: 14px;
+
+            /* Offsetter fallbacks — overwritten by Offsetter.js at runtime */
+            --offsetter-header-height:      56px;
+            --offsetter-header-top:         0px;
+            --offsetter-header-bottom:      56px;
+            --offsetter-promo-banner-height: 0px;
+            --offsetter-promo-banner-top:   56px;
+            --offsetter-promo-banner-bottom: 56px;
+            --offsetter-pill-nav-height:    48px;
+            --offsetter-pill-nav-top:       56px;
+            --offsetter-pill-nav-bottom:    104px;
+            --offsetter-total:              104px;
+            --offsetter-scroll-margin:      124px;
+        }
+
+        /* ════════════════════════════════════════════════════════════════
+           RESET & BASE
+           ════════════════════════════════════════════════════════════════ */
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: var(--c-bg);
+            color: var(--c-text);
+            font-family: var(--f-body);
+            font-size: 16px;
+            line-height: 1.7;
+            /* Push content below the fixed header */
+            padding-top: var(--offsetter-header-bottom, 56px);
+        }
+
+        body.has-bottom-bar {
+            padding-bottom: var(--offsetter-bottom-bar-height, 0px);
+        }
+
+        a { color: var(--c-accent); text-decoration: none; }
+        img { display: block; max-width: 100%; }
+
+        /* ════════════════════════════════════════════════════════════════
+           OFFSETTER CSS CONTRACT
+           All sticky top values come from Offsetter variables — zero
+           hardcoded pixel values for positioning.
+           ════════════════════════════════════════════════════════════════ */
+
+        /* Anchor sections: scroll-margin keeps them visible under the stack */
+        [data-offsetter-anchor] {
+            scroll-margin-top: var(--offsetter-scroll-margin, 80px);
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           LAYER 0 — HEADER  (position: fixed)
+           ════════════════════════════════════════════════════════════════ */
+
+        .site-header {
+            position: fixed;
+            inset: 0 0 auto 0;
+            z-index: 300;
+            background: rgba(13, 15, 20, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--c-border);
+        }
+
+        .site-header__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+        }
+
+        .site-header__logo {
+            font-family: var(--f-display);
+            font-weight: 800;
+            font-size: 1.1rem;
+            letter-spacing: -0.03em;
+            color: var(--c-text);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .site-header__logo-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--c-accent);
+            box-shadow: 0 0 8px var(--c-accent);
+        }
+
+        .site-header__nav {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .site-header__nav a {
+            font-family: var(--f-display);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--c-text-muted);
+            padding: 0.35rem 0.75rem;
+            border-radius: var(--radius);
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .site-header__nav a:hover {
+            color: var(--c-text);
+            background: var(--c-surface-2);
+        }
+
+        .site-header__cart {
+            font-family: var(--f-display);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--c-bg);
+            background: var(--c-accent);
+            padding: 0.4rem 1rem;
+            border-radius: var(--radius);
+            transition: opacity 0.2s;
+        }
+
+        .site-header__cart:hover { opacity: 0.85; color: var(--c-bg); }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           LAYER 1 — PROMO BANNER  (position: sticky)
+           Sticks at: var(--offsetter-promo-banner-top) = header-bottom
+           ════════════════════════════════════════════════════════════════ */
+
+        .promo-banner {
+            position: sticky;
+            top: var(--offsetter-promo-banner-top, 56px);
+            z-index: 200;
+            background: var(--c-promo);
+            border-bottom: 1px solid rgba(245, 166, 35, 0.25);
+            overflow: hidden;
+        }
+
+        .promo-banner__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0.6rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .promo-banner__text {
+            font-family: var(--f-display);
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            color: var(--c-promo-text);
+        }
+
+        .promo-banner__tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--c-bg);
+            background: var(--c-amber);
+            padding: 0.15rem 0.5rem;
+            border-radius: 3px;
+        }
+
+        .promo-banner__dismiss {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: var(--c-amber);
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            opacity: 0.6;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: opacity 0.2s;
+        }
+
+        .promo-banner__dismiss:hover { opacity: 1; }
+
+        /* Collapse animation when dismissed */
+        .promo-banner {
+            transition: max-height 0.35s ease, padding 0.35s ease, border-width 0.35s ease;
+            max-height: 100px;
+        }
+
+        .promo-banner.is-dismissed {
+            max-height: 0;
+            border-bottom-width: 0;
+        }
+
+        .promo-banner.is-dismissed .promo-banner__inner {
+            padding-block: 0;
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           LAYER 2 — PILL NAV  (position: sticky)
+           Sticks at: var(--offsetter-pill-nav-top) = header + promo
+           ════════════════════════════════════════════════════════════════ */
+
+        .pill-nav {
+            position: sticky;
+            top: var(--offsetter-pill-nav-top, 56px);
+            z-index: 100;
+            background: rgba(13, 15, 20, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--c-border);
+        }
+
+        .pill-nav__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0.625rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .pill-nav__inner::-webkit-scrollbar { display: none; }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.45rem 1rem;
+            border-radius: 999px;
+            font-family: var(--f-display);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--c-text-muted);
+            background: transparent;
+            border: 1px solid transparent;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .pill:hover {
+            color: var(--c-text);
+            background: var(--c-surface-2);
+            border-color: var(--c-border-2);
+        }
+
+        .pill.is-active {
+            color: var(--c-accent);
+            background: var(--c-accent-glow);
+            border-color: rgba(79, 143, 255, 0.35);
+        }
+
+        .pill__dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0;
+            transform: scale(0);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .pill.is-active .pill__dot {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           LAYOUT
+           ════════════════════════════════════════════════════════════════ */
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        .page-layout {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 3rem;
+            padding-top: 2.5rem;
+            padding-bottom: 4rem;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .page-layout { grid-template-columns: 1fr; }
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           STICKY GALLERY  (consumer — uses header-bottom, not total)
+           The gallery sticks only under the header, not under pill-nav.
+           This demonstrates intentional per-consumer variable selection.
+           ════════════════════════════════════════════════════════════════ */
+
+        .product-gallery {
+            position: sticky;
+            top: var(--offsetter-header-bottom, 56px);  /* ← NOT --offsetter-total */
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+        }
+
+        .product-gallery__img {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+        }
+
+        .product-gallery__caption {
+            padding: 1.25rem 1.5rem;
+            border-top: 1px solid var(--c-border);
+        }
+
+        .product-gallery__label {
+            font-family: var(--f-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--c-accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .product-gallery__name {
+            font-family: var(--f-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--c-text);
+        }
+
+        .product-gallery__note {
+            font-family: var(--f-mono);
+            font-size: 0.68rem;
+            color: var(--c-text-dim);
+            margin-top: 0.875rem;
+            padding: 0.6rem 0.8rem;
+            background: var(--c-surface-2);
+            border-radius: var(--radius);
+            border-left: 2px solid var(--c-accent);
+            line-height: 1.5;
+        }
+
+        .product-gallery__note span {
+            color: var(--c-accent);
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           CONTENT SECTIONS
+           ════════════════════════════════════════════════════════════════ */
+
+        .content-section {
+            min-height: 75vh;
+            padding-bottom: 4rem;
+        }
+
+        .content-section + .content-section {
+            border-top: 1px solid var(--c-border);
+            padding-top: 3rem;
+        }
+
+        .section-eyebrow {
+            font-family: var(--f-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--c-accent);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-eyebrow::before {
+            content: '';
+            width: 18px;
+            height: 1px;
+            background: var(--c-accent);
+        }
+
+        .section-title {
+            font-family: var(--f-display);
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.1;
+            color: var(--c-text);
+            margin-bottom: 1.25rem;
+        }
+
+        .section-body {
+            color: var(--c-text-muted);
+            line-height: 1.8;
+            max-width: 580px;
+        }
+
+        /* Code callout box */
+        .code-note {
+            margin-top: 1.5rem;
+            padding: 1rem 1.25rem;
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+            border-left: 3px solid var(--c-accent-2);
+            border-radius: var(--radius);
+        }
+
+        .code-note__label {
+            font-family: var(--f-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--c-accent-2);
+            margin-bottom: 0.5rem;
+        }
+
+        .code-note pre {
+            font-family: var(--f-mono);
+            font-size: 0.72rem;
+            color: var(--c-text-muted);
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .code-note .hi-var   { color: #79d7ff; }
+        .code-note .hi-val   { color: var(--c-green); }
+        .code-note .hi-prop  { color: var(--c-accent-2); }
+        .code-note .hi-cmt   { color: var(--c-text-dim); font-style: italic; }
+
+        /* Spec table */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+            font-size: 0.875rem;
+        }
+
+        .spec-table tr {
+            border-bottom: 1px solid var(--c-border);
+        }
+
+        .spec-table td {
+            padding: 0.75rem 0;
+            vertical-align: top;
+        }
+
+        .spec-table td:first-child {
+            width: 38%;
+            font-family: var(--f-mono);
+            font-size: 0.72rem;
+            color: var(--c-text-muted);
+            letter-spacing: 0.03em;
+            padding-right: 1rem;
+        }
+
+        .spec-table td:last-child {
+            color: var(--c-text);
+        }
+
+        /* Feature cards */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .feature-card {
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--c-border-2);
+            background: var(--c-surface-2);
+        }
+
+        .feature-card__icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature-card__title {
+            font-family: var(--f-display);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--c-text);
+            margin-bottom: 0.35rem;
+        }
+
+        .feature-card__text {
+            font-size: 0.8rem;
+            color: var(--c-text-muted);
+            line-height: 1.6;
+        }
+
+        /* Review card */
+        .review-card {
+            background: var(--c-surface);
+            border: 1px solid var(--c-border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-top: 1.25rem;
+        }
+
+        .review-card__stars {
+            color: var(--c-amber);
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .review-card__text {
+            font-style: italic;
+            color: var(--c-text-muted);
+            font-size: 0.925rem;
+            line-height: 1.7;
+            margin-bottom: 0.875rem;
+        }
+
+        .review-card__author {
+            font-family: var(--f-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--c-text-dim);
+        }
+
+        /* Gallery grid */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .photo-grid img {
+            width: 100%;
+            border-radius: var(--radius);
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            transition: opacity 0.2s;
+        }
+
+        .photo-grid img:hover { opacity: 0.85; }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           EXCLUDED LAYER — MOBILE BOTTOM BAR
+           data-offsetter-exclude: height measured, variables written,
+           but NOT added to --offsetter-total.
+           ════════════════════════════════════════════════════════════════ */
+
+        .bottom-bar {
+            position: fixed;
+            inset: auto 0 0 0;
+            z-index: 300;
+            background: var(--c-surface);
+            border-top: 1px solid var(--c-border);
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bottom-bar.is-visible {
+            transform: translateY(0);
+        }
+
+        .bottom-bar__inner {
+            max-width: 100%;
+            padding: 0.875rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .bottom-bar__price {
+            font-family: var(--f-display);
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--c-text);
+            margin-right: auto;
+        }
+
+        .bottom-bar__price span {
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--c-text-muted);
+        }
+
+        .btn-primary {
+            font-family: var(--f-display);
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--c-bg);
+            background: var(--c-accent);
+            border: none;
+            border-radius: var(--radius);
+            padding: 0.7rem 1.5rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-primary:hover { opacity: 0.85; }
+
+        .btn-ghost {
+            font-family: var(--f-display);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--c-text-muted);
+            background: var(--c-surface-2);
+            border: 1px solid var(--c-border);
+            border-radius: var(--radius);
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .btn-ghost:hover { color: var(--c-text); border-color: var(--c-border-2); }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           LIVE INSPECTOR PANEL
+           Floating panel showing Offsetter variables updating in real time.
+           Toggle with the [⊞] button in the header.
+           ════════════════════════════════════════════════════════════════ */
+
+        .inspector {
+            position: fixed;
+            bottom: 1.25rem;
+            right: 1.25rem;
+            width: 300px;
+            z-index: 400;
+            background: rgba(10, 12, 18, 0.95);
+            border: 1px solid var(--c-border-2);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(79,143,255,0.08);
+            font-family: var(--f-mono);
+            overflow: hidden;
+            transform: translateY(0);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        .inspector.is-hidden {
+            transform: translateY(calc(100% + 1.5rem));
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .inspector__header {
+            padding: 0.75rem 1rem;
+            background: var(--c-surface-2);
+            border-bottom: 1px solid var(--c-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .inspector__title {
+            font-size: 0.65rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--c-accent);
+            font-weight: 500;
+        }
+
+        .inspector__pulse {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--c-green);
+            box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.4); }
+            70%  { box-shadow: 0 0 0 5px rgba(61, 220, 151, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0); }
+        }
+
+        .inspector__body {
+            padding: 0.875rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .inspector__group-label {
+            font-size: 0.55rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--c-text-dim);
+            margin-top: 0.375rem;
+            margin-bottom: 0.125rem;
+        }
+
+        .inspector__row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .inspector__var-name {
+            font-size: 0.65rem;
+            color: var(--c-text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .inspector__var-name .prefix { color: var(--c-text-dim); }
+        .inspector__var-name .role   { color: #79d7ff; }
+        .inspector__var-name .suffix { color: var(--c-accent-2); }
+
+        .inspector__value {
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--c-green);
+            text-align: right;
+            min-width: 40px;
+            transition: color 0.3s;
+        }
+
+        .inspector__value.changed {
+            color: var(--c-amber);
+        }
+
+        .inspector__divider {
+            height: 1px;
+            background: var(--c-border);
+            margin: 0.25rem 0;
+        }
+
+        .inspector__total-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: baseline;
+            gap: 0.5rem;
+            padding-top: 0.25rem;
+        }
+
+        .inspector__total-name {
+            font-size: 0.67rem;
+            color: var(--c-accent);
+            font-weight: 500;
+        }
+
+        .inspector__total-value {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--c-accent);
+        }
+
+        /* Toggle button in header */
+        .inspector-toggle {
+            background: none;
+            border: 1px solid var(--c-border);
+            color: var(--c-text-muted);
+            font-family: var(--f-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.06em;
+            padding: 0.3rem 0.625rem;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .inspector-toggle:hover {
+            color: var(--c-accent);
+            border-color: var(--c-accent);
+        }
+
+
+        /* ════════════════════════════════════════════════════════════════
+           FOOTER
+           ════════════════════════════════════════════════════════════════ */
+
+        .site-footer {
+            border-top: 1px solid var(--c-border);
+            padding: 2.5rem 0;
+            color: var(--c-text-dim);
+        }
+
+        .site-footer__inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            font-family: var(--f-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.04em;
+        }
+
+        .site-footer__link {
+            color: var(--c-text-dim);
+            transition: color 0.2s;
+        }
+
+        .site-footer__link:hover { color: var(--c-accent); }
+
+    </style>
+</head>
+<body>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 0 — HEADER
+         Role: "header" | Position: fixed
+         Generates: --offsetter-header-height, -top (0px), -bottom
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <header class="site-header" data-offsetter-role="header">
+        <div class="site-header__inner">
+            <div class="site-header__logo">
+                <div class="site-header__logo-dot"></div>
+                Offsetter<span style="color:var(--c-accent)">·</span>js Demo
+            </div>
+            <nav class="site-header__nav">
+                <a href="#details">Details</a>
+                <a href="#specifications">Specs</a>
+                <a href="#reviews">Reviews</a>
+                <a href="#gallery">Gallery</a>
+            </nav>
+            <div style="display:flex;align-items:center;gap:0.75rem">
+                <button class="inspector-toggle" id="inspector-toggle">
+                    ⊞ Inspector
+                </button>
+                <a href="#details" class="site-header__cart">$749</a>
+            </div>
+        </div>
+    </header>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 1 — PROMO BANNER
+         Role: "promo-banner" | Position: sticky
+         top: var(--offsetter-promo-banner-top) = header-bottom
+         Generates: --offsetter-promo-banner-height, -top, -bottom
+
+         When dismissed: offsetHeight → 0, ResizeObserver fires,
+         Offsetter recalculates — pill-nav shifts up automatically.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div class="promo-banner" data-offsetter-role="promo-banner" id="promo-banner">
+        <div class="promo-banner__inner">
+            <span class="promo-banner__tag">Today only</span>
+            <span class="promo-banner__text">
+                Free shipping on all orders · Use code <strong>OFFSETTER</strong>
+            </span>
+            <button class="promo-banner__dismiss" id="promo-dismiss" title="Dismiss">✕</button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LAYER 2 — PILL NAV
+         Role: "pill-nav" | Position: sticky
+         top: var(--offsetter-pill-nav-top) = header + promo heights
+         Generates: --offsetter-pill-nav-height, -top, -bottom
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <nav class="pill-nav" data-offsetter-role="pill-nav" aria-label="Product sections">
+        <div class="pill-nav__inner">
+            <a class="pill is-active" href="#details"        data-pill-target="details">
+                <span class="pill__dot"></span> Details
+            </a>
+            <a class="pill" href="#specifications" data-pill-target="specifications">
+                <span class="pill__dot"></span> Specifications
+            </a>
+            <a class="pill" href="#reviews"         data-pill-target="reviews">
+                <span class="pill__dot"></span> Reviews
+            </a>
+            <a class="pill" href="#gallery"         data-pill-target="gallery">
+                <span class="pill__dot"></span> Gallery
+            </a>
+        </div>
+    </nav>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         MAIN CONTENT
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <main>
+        <div class="container">
+            <div class="page-layout">
+
+
+                <!-- ── LEFT COLUMN — Sticky gallery ───────────────────── -->
+                <!--
+                    INTENTIONAL: uses --offsetter-header-bottom, NOT --offsetter-total.
+                    The gallery should sit flush under the header and scroll past
+                    the pill-nav — not be pinned under the entire stack.
+                    This is the power of per-layer -bottom variables.
+                -->
+                <aside>
+                    <div class="product-gallery">
+                        <img
+                            src="https://picsum.photos/seed/aura2025/840/630"
+                            alt="AuraPhone Pro"
+                            class="product-gallery__img"
+                        >
+                        <div class="product-gallery__caption">
+                            <div class="product-gallery__label">AuraPhone Pro 2025</div>
+                            <div class="product-gallery__name">Titanium Blue · 512 GB</div>
+                            <div class="product-gallery__note">
+                                <code><span>top:</span> <span>var(--offsetter-header-bottom)</span></code><br>
+                                This gallery sticks only under the <span>header</span>, not under pill-nav.
+                                It uses <span>--offsetter-header-bottom</span> directly —
+                                a deliberate per-consumer CSS choice.
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+
+                <!-- ── RIGHT COLUMN — Anchor sections ─────────────────── -->
+                <div>
+
+                    <!-- ─────────────────────────────────────────────────
+                         SECTION: Details
+                         data-offsetter-anchor → scroll-margin-top: var(--offsetter-scroll-margin)
+                         ───────────────────────────────────────────────── -->
+                    <section
+                        id="details"
+                        class="content-section"
+                        data-offsetter-anchor
+                        data-spy-section
+                    >
+                        <div class="section-eyebrow">Section 01</div>
+                        <h2 class="section-title">Product Details</h2>
+                        <p class="section-body">
+                            AuraPhone Pro 2025 — aerospace-grade titanium frame,
+                            6.7-inch Super Retina XDR ProMotion display, A18 Bionic chip.
+                            Engineered for those who refuse to compromise.
+                        </p>
+
+                        <div class="code-note">
+                            <div class="code-note__label">How this anchor section works</div>
+                            <pre><code><span class="hi-cmt">/* CSS — zero hardcoded values */</span>
+[<span class="hi-prop">data-offsetter-anchor</span>] {
+  <span class="hi-prop">scroll-margin-top</span>:
+    <span class="hi-var">var</span>(<span class="hi-var">--offsetter-scroll-margin</span>,
+    <span class="hi-val">80px</span>);
+}
+
+<span class="hi-cmt">/* Offsetter writes at runtime: */</span>
+<span class="hi-var">--offsetter-scroll-margin</span>: <span class="hi-val">↑ live</span>;</code></pre>
+                        </div>
+
+                        <div class="feature-grid">
+                            <div class="feature-card">
+                                <div class="feature-card__icon">⚡</div>
+                                <div class="feature-card__title">A18 Bionic</div>
+                                <div class="feature-card__text">8-core GPU, 16-core Neural Engine, 12 GB LPDDR5.</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-card__icon">📸</div>
+                                <div class="feature-card__title">Triple Camera</div>
+                                <div class="feature-card__text">48MP wide · 12MP ultra-wide · 12MP telephoto 3×.</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-card__icon">🔋</div>
+                                <div class="feature-card__title">28h Battery</div>
+                                <div class="feature-card__text">All-day video playback. MagSafe 15W wireless.</div>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-card__icon">🛡️</div>
+                                <div class="feature-card__title">IP68 Rated</div>
+                                <div class="feature-card__text">6m depth, 30 minutes. Ceramic Shield front.</div>
+                            </div>
+                        </div>
+                    </section>
+
+
+                    <!-- ─────────────────────────────────────────────────
+                         SECTION: Specifications
+                         ───────────────────────────────────────────────── -->
+                    <section
+                        id="specifications"
+                        class="content-section"
+                        data-offsetter-anchor
+                        data-spy-section
+                    >
+                        <div class="section-eyebrow">Section 02</div>
+                        <h2 class="section-title">Specifications</h2>
+                        <p class="section-body">
+                            Full technical breakdown. Every number is real —
+                            none of these offsets are.
+                        </p>
+
+                        <table class="spec-table">
+                            <tbody>
+                                <tr><td>Display</td>       <td>6.7" Super Retina XDR, 120Hz ProMotion OLED</td></tr>
+                                <tr><td>Chip</td>          <td>A18 Bionic — 6-core CPU, 8-core GPU</td></tr>
+                                <tr><td>RAM</td>           <td>12 GB LPDDR5</td></tr>
+                                <tr><td>Storage</td>       <td>256 GB / 512 GB / 1 TB NVMe</td></tr>
+                                <tr><td>Main camera</td>   <td>48MP f/1.78 + 12MP UW + 12MP tele 3× OIS</td></tr>
+                                <tr><td>Front camera</td>  <td>12MP TrueDepth, autofocus, 4K Dolby Vision</td></tr>
+                                <tr><td>Battery</td>       <td>≤ 28h video · MagSafe 15W · Fast charge 50% / 30m</td></tr>
+                                <tr><td>Connectivity</td>  <td>5G sub-6 + mmWave · Wi-Fi 7 · BT 5.4 · UWB · NFC</td></tr>
+                                <tr><td>Protection</td>    <td>IP68 · 6m / 30min · Ceramic Shield · Titanium frame</td></tr>
+                                <tr><td>Auth</td>          <td>Face ID — TrueDepth array</td></tr>
+                                <tr><td>OS</td>            <td>iOS 18 · 5yr software support guaranteed</td></tr>
+                                <tr><td>Dimensions</td>    <td>159.9 × 76.7 × 8.25mm · 221g</td></tr>
+                                <tr><td>Colors</td>        <td>Natural Titanium · Blue · Space Black · Gold</td></tr>
+                            </tbody>
+                        </table>
+                    </section>
+
+
+                    <!-- ─────────────────────────────────────────────────
+                         SECTION: Reviews
+                         ───────────────────────────────────────────────── -->
+                    <section
+                        id="reviews"
+                        class="content-section"
+                        data-offsetter-anchor
+                        data-spy-section
+                    >
+                        <div class="section-eyebrow">Section 03</div>
+                        <h2 class="section-title">Reviews</h2>
+                        <p class="section-body">
+                            Real users. Real scroll-margin-top. None of the offsets are guesswork.
+                        </p>
+
+                        <div class="review-card">
+                            <div class="review-card__stars">★★★★★</div>
+                            <p class="review-card__text">
+                                "Best device I've ever owned. Camera is terrifyingly good,
+                                battery lasts two full days. The titanium doesn't feel premium —
+                                it feels inevitable."
+                            </p>
+                            <div class="review-card__author">Sarah K. · Verified Purchase</div>
+                        </div>
+
+                        <div class="review-card">
+                            <div class="review-card__stars">★★★★★</div>
+                            <p class="review-card__text">
+                                "I dismissed the promo banner and watched the pill-nav
+                                snap up in real time. Accidentally spent 20 minutes just
+                                doing that instead of reviewing the phone."
+                            </p>
+                            <div class="review-card__author">Marcus T. · Developer</div>
+                        </div>
+
+                        <div class="review-card">
+                            <div class="review-card__stars">★★★★☆</div>
+                            <p class="review-card__text">
+                                "Finally a scroll offset system that doesn't require me to
+                                grep for magic numbers when the header changes height.
+                                Would give 5 stars but I need something to complain about."
+                            </p>
+                            <div class="review-card__author">Yuki A. · Frontend Engineer</div>
+                        </div>
+                    </section>
+
+
+                    <!-- ─────────────────────────────────────────────────
+                         SECTION: Gallery
+                         ───────────────────────────────────────────────── -->
+                    <section
+                        id="gallery"
+                        class="content-section"
+                        data-offsetter-anchor
+                        data-spy-section
+                    >
+                        <div class="section-eyebrow">Section 04</div>
+                        <h2 class="section-title">Gallery</h2>
+                        <p class="section-body">
+                            Every image loaded correctly. Every scroll offset computed automatically.
+                        </p>
+
+                        <div class="photo-grid">
+                            <img src="https://picsum.photos/seed/p1/600/450" alt="Front view" loading="lazy">
+                            <img src="https://picsum.photos/seed/p2/600/450" alt="Back view"  loading="lazy">
+                            <img src="https://picsum.photos/seed/p3/600/450" alt="Side view"  loading="lazy">
+                            <img src="https://picsum.photos/seed/p4/600/450" alt="Camera"     loading="lazy">
+                        </div>
+                    </section>
+
+                </div><!-- /right column -->
+            </div><!-- /page-layout -->
+        </div><!-- /container -->
+    </main>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         EXCLUDED LAYER — MOBILE BOTTOM BAR
+         data-offsetter-exclude: height is measured + variables written,
+         but this layer does NOT move --offsetter-total or shift pill-nav.
+         body.has-bottom-bar padding-bottom reads --offsetter-bottom-bar-height.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div
+        class="bottom-bar"
+        id="bottom-bar"
+        data-offsetter-role="bottom-bar"
+        data-offsetter-exclude
+    >
+        <div class="bottom-bar__inner">
+            <div class="bottom-bar__price">
+                $749<span>.99</span>
+            </div>
+            <button class="btn-ghost">♡ Save</button>
+            <button class="btn-primary">Add to Cart</button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         LIVE INSPECTOR PANEL
+         Reads CSS variables from :root after every 'offsetter:change' event.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <div class="inspector" id="inspector">
+        <div class="inspector__header">
+            <span class="inspector__title">Offsetter Inspector</span>
+            <div class="inspector__pulse" id="inspector-pulse"></div>
+        </div>
+        <div class="inspector__body" id="inspector-body">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         FOOTER
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <span>Offsetter.js v1.0.0 · MIT License</span>
+            <span>Open DevTools → <code style="color:var(--c-accent)">Offsetter.debug()</code></span>
+            <a class="site-footer__link" href="Offsetter.js">View source ↗</a>
+        </div>
+    </footer>
+
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         SCRIPTS
+         Offsetter.js must be loaded before the application script.
+         Use defer (not async) — scanDOM() needs full DOM in source order.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <!--
+        Offsetter.js is expected to be in the same directory as this file.
+        It auto-initialises on DOMContentLoaded — no manual Offsetter.init() needed.
+    -->
+    <script src="Offsetter.js" defer></script>
+
+    <script defer>
+    /* ════════════════════════════════════════════════════════════════════
+       APPLICATION SCRIPT
+
+       Demonstrates three integration patterns:
+
+         1. CSS contract   — sticky top, scroll-margin-top via var()
+                             (no JS needed at all for layout)
+         2. JS API call    — Offsetter.getScrollMargin() for scroll-spy
+         3. Event listener — 'offsetter:change' for reactive updates
+       ════════════════════════════════════════════════════════════════════ */
+
+    document.addEventListener('DOMContentLoaded', () => {
+
+
+        /* ── 1. INSPECTOR PANEL ─────────────────────────────────────────
+           Renders a live table of CSS variables after each recalculation.
+           Reads directly from getComputedStyle(document.documentElement)
+           so it shows exactly what the browser sees — not a JS cache.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const inspectorBody  = document.getElementById('inspector-body');
+        const inspectorEl    = document.getElementById('inspector');
+        const inspectorPulse = document.getElementById('inspector-pulse');
+        const inspectorToggle = document.getElementById('inspector-toggle');
+
+        // Track previous values to animate changes
+        const prevValues = {};
+
+        function renderInspector(detail) {
+            if (!inspectorBody) return;
+
+            const cs = getComputedStyle(document.documentElement);
+            const get = name => cs.getPropertyValue(name).trim() || '—';
+
+            const roles = [];
+            if (detail?.layers) {
+                detail.layers.forEach((_, role) => roles.push(role));
+            }
+
+            let html = '';
+
+            // Per-layer variables
+            for (const role of roles) {
+                html += `<div class="inspector__group-label">${role}</div>`;
+
+                for (const suffix of ['height', 'top', 'bottom']) {
+                    const varName = `--offsetter-${role}-${suffix}`;
+                    const value   = get(varName);
+                    const changed = prevValues[varName] && prevValues[varName] !== value;
+                    prevValues[varName] = value;
+
+                    html += `
+                    <div class="inspector__row">
+                        <div class="inspector__var-name">
+                            <span class="prefix">--offsetter-</span><span class="role">${role}</span><span class="suffix">-${suffix}</span>
+                        </div>
+                        <div class="inspector__value ${changed ? 'changed' : ''}" data-var="${varName}">
+                            ${value}
+                        </div>
+                    </div>`;
+                }
+            }
+
+            // Globals
+            html += `<div class="inspector__divider"></div>`;
+
+            const totalVar  = '--offsetter-total';
+            const marginVar = '--offsetter-scroll-margin';
+            const totalVal  = get(totalVar);
+            const marginVal = get(marginVar);
+
+            html += `
+            <div class="inspector__total-row">
+                <div class="inspector__total-name">--offsetter-total</div>
+                <div class="inspector__total-value">${totalVal}</div>
+            </div>
+            <div class="inspector__total-row">
+                <div class="inspector__total-name">--offsetter-scroll-margin</div>
+                <div class="inspector__total-value">${marginVal}</div>
+            </div>`;
+
+            inspectorBody.innerHTML = html;
+
+            // Pulse animation on update
+            inspectorPulse.style.background = 'var(--c-amber)';
+            setTimeout(() => { inspectorPulse.style.background = 'var(--c-green)'; }, 400);
+
+            // Remove 'changed' highlight after animation
+            setTimeout(() => {
+                inspectorBody.querySelectorAll('.inspector__value.changed')
+                    .forEach(el => el.classList.remove('changed'));
+            }, 800);
+        }
+
+        // Toggle inspector visibility
+        inspectorToggle?.addEventListener('click', () => {
+            inspectorEl.classList.toggle('is-hidden');
+        });
+
+        // Render immediately and on every Offsetter recalculation
+        document.addEventListener('offsetter:change', ({ detail }) => {
+            renderInspector(detail);
+        });
+
+        // Initial render — Offsetter may have already fired before this listener attached.
+        // Render with whatever is currently in :root.
+        renderInspector({ layers: new Map() });
+
+
+        /* ── 2. PROMO BANNER DISMISS ────────────────────────────────────
+           Adding .is-dismissed collapses the banner via CSS max-height transition.
+           ResizeObserver on the banner element detects the height change
+           and Offsetter.recalculate() fires automatically — pill-nav shifts up.
+           No manual Offsetter call needed.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const promoBanner  = document.getElementById('promo-banner');
+        const promoDismiss = document.getElementById('promo-dismiss');
+
+        promoDismiss?.addEventListener('click', () => {
+            promoBanner.classList.add('is-dismissed');
+            // ResizeObserver catches the height→0 transition and recalculates.
+            // Inspector will update automatically via 'offsetter:change'.
+        });
+
+
+        /* ── 3. SCROLL-SPY ──────────────────────────────────────────────
+           spyThreshold comes from Offsetter — no hardcoded numbers.
+
+           Pattern:
+             a) Read initial value via Offsetter.getScrollMargin()
+             b) Stay in sync via 'offsetter:change' event (promo dismiss, resize)
+
+           scrollIntoView({ block: 'start' }) on pill click works because
+           CSS already set scroll-margin-top: var(--offsetter-scroll-margin).
+           The browser handles the offset math — we just call scrollIntoView.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const pills    = document.querySelectorAll('.pill[data-pill-target]');
+        const sections = document.querySelectorAll('[data-spy-section]');
+
+        // Live threshold — updated whenever Offsetter recalculates
+        let spyThreshold = (window.Offsetter?.getScrollMargin?.()) ?? 80;
+
+        document.addEventListener('offsetter:change', ({ detail }) => {
+            spyThreshold = detail.scrollMargin;
+        });
+
+        // Smooth scroll on pill click
+        pills.forEach(pill => {
+            pill.addEventListener('click', e => {
+                e.preventDefault();
+                const targetId = pill.dataset.pillTarget;
+                const target   = document.getElementById(targetId);
+                // scrollIntoView respects scroll-margin-top set by CSS.
+                // No manual offset subtraction needed here.
+                target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Scroll-spy: activate the pill whose section is at the top of the view
+        function updateActivePill() {
+            let current = '';
+            const scrollY = window.scrollY;
+
+            sections.forEach(section => {
+                const sectionTop = section.getBoundingClientRect().top + scrollY;
+                if (scrollY >= sectionTop - spyThreshold) {
+                    current = section.id;
+                }
+            });
+
+            pills.forEach(pill => {
+                const isActive = pill.dataset.pillTarget === current;
+                pill.classList.toggle('is-active', isActive);
+            });
+        }
+
+        window.addEventListener('scroll', updateActivePill, { passive: true });
+        updateActivePill(); // Run once on load
+
+
+        /* ── 4. MOBILE BOTTOM BAR ───────────────────────────────────────
+           Appears once the user scrolls past the main product details.
+           padding-bottom on body is handled by CSS:
+             body.has-bottom-bar { padding-bottom: var(--offsetter-bottom-bar-height) }
+           The variable is written by Offsetter because "bottom-bar" is registered
+           with data-offsetter-exclude — height tracked, but not summed into total.
+        ─────────────────────────────────────────────────────────────────── */
+
+        const bottomBar    = document.getElementById('bottom-bar');
+        const galleryEl    = document.querySelector('.product-gallery');
+
+        function updateBottomBar() {
+            if (!galleryEl || !bottomBar) return;
+            const rect    = galleryEl.getBoundingClientRect();
+            const pastEnd = rect.bottom < 0;
+            bottomBar.classList.toggle('is-visible', pastEnd);
+            document.body.classList.toggle('has-bottom-bar', pastEnd);
+        }
+
+        window.addEventListener('scroll', updateBottomBar, { passive: true });
+        updateBottomBar();
+
+
+        /* ── 5. DEVTOOLS HINT ───────────────────────────────────────────── */
+
+        console.info(
+            '%c Offsetter.js Demo %c\n' +
+            'Run %cOffsetter.debug()%c in this console to inspect the live stack.\n' +
+            'Try dismissing the promo banner and watch the inspector update.',
+            'background:#4f8fff;color:#0d0f14;font-weight:700;border-radius:3px;padding:2px 6px',
+            'color:#6b7494',
+            'color:#3ddc97;font-family:monospace',
+            'color:#6b7494'
+        );
+
+    }); // DOMContentLoaded
+    </script>
+
+</body>
+</html>
