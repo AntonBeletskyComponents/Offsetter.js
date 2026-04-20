@@ -1,6 +1,6 @@
 /**
  * @file        Offsetter.js
- * @version     1.1.0
+ * @version     1.0.0
  * @license     MIT
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
@@ -102,8 +102,6 @@
  *    Registers the element as a stack layer. The role name becomes part of
  *    the CSS variable names. Use lowercase-kebab-case (e.g. "promo-banner").
  *    DOM order determines stack position — no explicit index needed.
- *    Only [a-z0-9-] characters are allowed; anything else is stripped by
- *    sanitizeRole() before being written into the <style> tag.
  *
  *  data-offsetter-exclude
  *    The element is observed (its per-layer variables are written) but its
@@ -155,12 +153,10 @@
  * ─────────────────────────────────────────────────────────────────────────
  *
  *  Offsetter.init({
- *      spyBuffer:         20,               // px added to --offsetter-scroll-margin
- *      styleId:           'offsetter-vars', // id of the generated <style> tag
- *      watchMutations:    true,             // observe dynamically added/removed layers
- *      debug:             false,            // log recalculations to console
- *      statePollInterval: 1000,             // ms — smart poller interval (0 = off)
- *      pollingInterval:   0,               // ms — blind recalculate interval (0 = off)
+ *      spyBuffer:      20,               // px added to --offsetter-scroll-margin
+ *      styleId:        'offsetter-vars', // id of the generated <style> tag
+ *      watchMutations: true,             // observe dynamically added/removed layers
+ *      debug:          false,            // log recalculations to console
  *  });
  *
  * ─────────────────────────────────────────────────────────────────────────
@@ -174,20 +170,6 @@
  *    • Support multiple independent stacks on one page.
  *    • Manage bottom-of-viewport sticky bars (use data-offsetter-exclude).
  *    • Know anything about the page structure beyond element heights.
- *
- * ─────────────────────────────────────────────────────────────────────────
- *  CHANGELOG
- * ─────────────────────────────────────────────────────────────────────────
- *
- *  v1.1.0
- *    - [security] sanitizeRole() strips non-[a-z0-9-] chars from role names
- *      before CSS interpolation. Prevents CSS injection via data-offsetter-role.
- *    - [refactor] transitionend listener now managed via AbortController
- *      (listenerAC) instead of a manual removeEventListener call.
- *      transitionHandler variable eliminated. destroy() is simpler.
- *
- *  v1.0.0
- *    - Initial release.
  */
 
 
@@ -207,19 +189,18 @@ const Offsetter = (() => {
 
     /**
      * @typedef {Object} OffsetterOptions
-     * @property {number}  [spyBuffer=20]             - Extra px added to --offsetter-scroll-margin.
-     *                                                  Think of it as personal space for your anchors.
-     * @property {string}  [styleId='offsetter-vars'] - id of the generated <style> element.
-     * @property {boolean} [watchMutations=true]       - MutationObserver — auto-registers layers
-     *                                                  added/removed from DOM at runtime.
-     * @property {boolean} [debug=false]               - Log recalculations to console.
-     *                                                  Your coworkers will think you're very busy.
-     * @property {number}  [statePollInterval=1000]    - Smart poller interval in ms.
-     *                                                  Checks heights, recalculates only on change.
-     *                                                  Zero DOM writes on idle ticks.
-     *                                                  Set to 0 to disable.
-     * @property {number}  [pollingInterval=0]         - Blind recalculate() every N ms (0 = off).
-     *                                                  The caveman option. Prefer statePollInterval.
+     * @property {number}  [spyBuffer=20]                - Extra px added to --offsetter-scroll-margin.
+     * @property {string}  [styleId='offsetter-vars']    - id of the generated <style> element.
+     * @property {boolean} [watchMutations=true]          - MutationObserver — auto-registers layers
+     *                                                     added/removed from DOM at runtime.
+     * @property {boolean} [debug=false]                  - Log recalculations to console.
+     * @property {number}  [statePollInterval=1000]       - "Virtual world" scanner interval in ms.
+     *                                                     Every tick compares cached heights vs real
+     *                                                     DOM heights. Recalculates only on change —
+     *                                                     zero DOM writes on idle ticks.
+     *                                                     Set to 0 to disable.
+     * @property {number}  [pollingInterval=0]            - Blind recalculate() every N ms (0 = off).
+     *                                                     Prefer statePollInterval instead.
      */
 
     /**
@@ -236,9 +217,9 @@ const Offsetter = (() => {
 
     /**
      * @typedef {Object} ChangeEventDetail
-     * @property {number}                  total        - Current value of --offsetter-total.
-     * @property {number}                  scrollMargin - Current value of --offsetter-scroll-margin.
-     * @property {Map<string, LayerEntry>} layers       - Snapshot of the full contributors map.
+     * @property {number}              total        - Current value of --offsetter-total.
+     * @property {number}              scrollMargin - Current value of --offsetter-scroll-margin.
+     * @property {Map<string, LayerEntry>} layers   - Snapshot of the full contributors map.
      */
 
 
@@ -251,18 +232,18 @@ const Offsetter = (() => {
      * @type {Required<OffsetterOptions>}
      */
     const config = {
-        spyBuffer:         20,
-        styleId:           'offsetter-vars',
-        watchMutations:    true,
-        debug:             false,
-        pollingInterval:   0,     // ms — blind recalculate every N ms (0 = off)
-        statePollInterval: 1000,  // ms — smart poller: recalculates only on height change
+        spyBuffer:        20,
+        styleId:          'offsetter-vars',
+        watchMutations:   true,
+        debug:            false,
+        pollingInterval:  0,     // ms — слепой пересчёт каждые N мс (0 = выключено)
+        statePollInterval: 1000, // ms — умный поллер: пересчёт только при изменении высот
     };
 
     /**
      * Ordered map of registered layer contributors.
      * Insertion order = DOM order (guaranteed by querySelectorAll scan in scanDOM).
-     * Key: sanitized role string. Value: LayerEntry.
+     * Key: role string. Value: LayerEntry.
      *
      * @type {Map<string, LayerEntry>}
      */
@@ -292,33 +273,27 @@ const Offsetter = (() => {
     let rafHandle = null;
 
     /**
-     * setInterval handle for the blind polling fallback.
+     * setInterval handle for polling-based recalculation.
      * Active only when config.pollingInterval > 0.
-     * The dumb cousin of statePollInterval. Use only if you really need it.
      * @type {number|null}
      */
     let pollingHandle = null;
 
     /**
-     * setInterval handle for the smart state poller.
+     * setInterval handle for the state poller.
      * Runs every config.statePollInterval ms, compares current heights
-     * against cached values — recalculates only when something actually changed.
-     * Zero DOM writes on idle ticks. Like a security guard who only calls backup
-     * when something is actually wrong, not every 30 seconds "just in case".
+     * against cached values — only recalculates when something changed.
+     * Zero DOM writes on idle frames.
      * @type {number|null}
      */
     let pollerHandle = null;
 
     /**
-     * AbortController for the transitionend document listener.
-     * One abort() call in destroy() removes the listener cleanly.
-     * No more storing handler references just to remove them later —
-     * that was the JS equivalent of writing your own name on your lunch
-     * so you could throw it away yourself.
-     *
-     * @type {AbortController|null}
+     * Bound reference to the transitionend handler.
+     * Stored so it can be removed in destroy().
+     * @type {Function|null}
      */
-    let listenerAC = null;
+    let transitionHandler = null;
 
 
     /* ───────────────────────────────────────────────────────────────────────
@@ -326,35 +301,15 @@ const Offsetter = (() => {
        ─────────────────────────────────────────────────────────────────────── */
 
     /**
-     * Sanitize a role name before it touches a CSS string.
-     *
-     * Strips every character that is not [a-z], [0-9], or [-].
-     * Valid role names ("header", "pill-nav", "promo-banner") pass through
-     * unchanged. Malicious ones ("x} body{color:red") are defanged.
-     *
-     * This is the bouncer at the door of our <style> tag.
-     * No ID, no entry. No exceptions.
-     *
-     * @param  {string} role - Raw role string from a data attribute.
-     * @returns {string}       Sanitized role safe for CSS custom property names.
-     */
-    function sanitizeRole(role) {
-        return role.replace(/[^a-z0-9-]/g, '');
-    }
-
-    /**
      * Scan the entire document for [data-offsetter-role] elements in DOM order
      * and register any that are not already tracked.
      *
      * querySelectorAll guarantees document order, so the Map insertion order
      * reflects the visual top-to-bottom stack without any manual index.
-     * It's like a seating chart — who's on top is determined by where you sit,
-     * not by how loud you are.
      */
     function scanDOM() {
         document.querySelectorAll('[data-offsetter-role]').forEach(el => {
-            // sanitizeRole() runs here — before the role touches anything.
-            const role = sanitizeRole(el.dataset.offsetterRole.trim());
+            const role = el.dataset.offsetterRole.trim();
             if (role && !contributors.has(role)) {
                 registerContributor(role, el);
             }
@@ -364,7 +319,7 @@ const Offsetter = (() => {
     /**
      * Register a single contributor and start observing its size.
      *
-     * @param {string}  role - The sanitized data-offsetter-role value.
+     * @param {string}  role - The data-offsetter-role value.
      * @param {Element} el   - The DOM element to observe.
      */
     function registerContributor(role, el) {
@@ -383,7 +338,7 @@ const Offsetter = (() => {
      * Unregister a contributor and stop observing it.
      * Triggers a recalculation so downstream variables are updated immediately.
      *
-     * @param {string} role - Sanitized role string.
+     * @param {string} role
      */
     function unregisterContributor(role) {
         const entry = contributors.get(role);
@@ -404,20 +359,6 @@ const Offsetter = (() => {
      *   5. Build CSS variable strings in the same pass.
      *   6. Write everything to the <style> tag in one assignment.
      *   7. Dispatch 'offsetter:change'.
-     *
-     * One read phase → one write. No interleaving.
-     * The browser's layout engine sighs with relief.
-     *
-     * TECHNICAL DEBT NOTE (PERF_RO_DISCARD):
-     *   ResizeObserver entries carry borderBoxSize[0].blockSize which equals
-     *   offsetHeight for standard block elements, making the offsetHeight read
-     *   below technically redundant on the RO-triggered path. However,
-     *   recalculate() is called from five different entry points (RO, state
-     *   poller, transitionend, window load, manual call), so skipping the read
-     *   selectively would require adding a _fresh flag to LayerEntry or an
-     *   optional argument here — both change the internal contract. For a
-     *   typical 2–4 element stack the cost is negligible. Defer until there is
-     *   a measurable performance problem or test coverage on all five paths.
      */
     function recalculate() {
         let cursor = 0;
@@ -425,19 +366,15 @@ const Offsetter = (() => {
 
         contributors.forEach((entry, role) => {
             // Single offsetHeight read per element — prevents forced reflow loops.
-            // All reads happen before any write. The browser thanks us.
             entry.height = entry.element.offsetHeight;
             entry.top    = cursor;
             entry.bottom = cursor + entry.height;
 
-            // role is already sanitized — safe to interpolate directly into CSS.
             vars.push(`  --offsetter-${role}-height: ${entry.height}px`);
             vars.push(`  --offsetter-${role}-top:    ${entry.top}px`);
             vars.push(`  --offsetter-${role}-bottom: ${entry.bottom}px`);
 
             // Excluded layers do not shift the cursor — they don't contribute to total.
-            // They're like that one team member who attends every meeting but
-            // is never assigned any tasks. Observed, but not counted.
             if (!entry.excluded) {
                 cursor = entry.bottom;
             }
@@ -462,16 +399,14 @@ const Offsetter = (() => {
      * The tag is created once and appended to <head>; only textContent changes
      * on subsequent calls — no node removal or recreation.
      *
-     * One assignment to rule them all. One string to find them.
-     * One textContent to bring them all and in the stylesheet bind them.
-     *
      * @param {string[]} vars - Array of declaration strings ("  --name: value").
      */
     function writeVars(vars) {
         if (!styleTag) {
             styleTag = document.createElement('style');
             styleTag.id = config.styleId;
-            styleTag.dataset.generator = 'Offsetter.js v1.1.0';
+            // The comment above the style tag is written once and never changed.
+            styleTag.dataset.generator = 'Offsetter.js v1.0.0';
             document.head.appendChild(styleTag);
         }
         styleTag.textContent = `/* Offsetter.js — auto-generated, do not edit */\n:root {\n${vars.join(';\n')};\n}`;
@@ -479,7 +414,6 @@ const Offsetter = (() => {
 
     /**
      * Dispatch the 'offsetter:change' CustomEvent on document.
-     * Consumers listen to this instead of polling. Revolutionary concept.
      *
      * @param {number} total
      * @param {number} scrollMargin
@@ -491,7 +425,6 @@ const Offsetter = (() => {
                 total,
                 scrollMargin,
                 // Shallow copy of the Map — consumers get a snapshot, not a live reference.
-                // "Here's the data" not "here's my diary, please be careful with it".
                 layers: new Map(contributors),
             },
         }));
@@ -501,9 +434,6 @@ const Offsetter = (() => {
      * Schedule a recalculate() on the next animation frame.
      * If one is already pending the request is ignored — batching multiple
      * ResizeObserver callbacks into a single recalculation.
-     *
-     * Think of it as a "we'll handle this in the next stand-up" policy,
-     * except it actually works and takes 16ms instead of two weeks.
      */
     function scheduleRecalculate() {
         if (rafHandle !== null) return;
@@ -516,7 +446,6 @@ const Offsetter = (() => {
     /**
      * Initialise the single shared ResizeObserver.
      * Every observed element routes through the same debounced handler.
-     * One observer to watch them all. Efficiency is not negotiable.
      */
     function initResizeObserver() {
         resizeObserver = new ResizeObserver(scheduleRecalculate);
@@ -531,8 +460,6 @@ const Offsetter = (() => {
      *
      * This covers React portals, Bootstrap modals, AJAX-injected content, and any
      * other dynamic DOM manipulation without requiring manual register() calls.
-     * Basically the surveillance camera of our sticky stack. It sees everything.
-     * It judges nothing. It just recalculates.
      */
     function initMutationObserver() {
         mutationObserver = new MutationObserver(mutations => {
@@ -544,14 +471,14 @@ const Offsetter = (() => {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== Node.ELEMENT_NODE) continue;
 
-                    // sanitizeRole() applied at the point of reading — before any lookup.
-                    const directRole = sanitizeRole(node.dataset?.offsetterRole?.trim() ?? '');
+                    // The node itself may be a contributor.
+                    const directRole = node.dataset?.offsetterRole?.trim();
                     if (directRole && !contributors.has(directRole)) {
                         needsRescan = true;
                         break;
                     }
 
-                    // A contributor may be nested inside the added subtree
+                    // Or a contributor may be nested inside the added subtree
                     // (e.g. React mounts an entire component tree at once).
                     if (node.querySelector?.('[data-offsetter-role]')) {
                         needsRescan = true;
@@ -565,16 +492,14 @@ const Offsetter = (() => {
                 for (const node of mutation.removedNodes) {
                     if (node.nodeType !== Node.ELEMENT_NODE) continue;
 
-                    // sanitizeRole() applied here too — the Map was built with
-                    // sanitized keys, so lookups must use the same sanitized value.
-                    const directRole = sanitizeRole(node.dataset?.offsetterRole?.trim() ?? '');
+                    const directRole = node.dataset?.offsetterRole?.trim();
                     if (directRole && contributors.has(directRole)) {
                         unregisterContributor(directRole);
                     }
 
                     // Check removed subtree for nested contributors.
                     node.querySelectorAll?.('[data-offsetter-role]').forEach(el => {
-                        const role = sanitizeRole(el.dataset.offsetterRole?.trim() ?? '');
+                        const role = el.dataset.offsetterRole?.trim();
                         if (role && contributors.has(role)) {
                             unregisterContributor(role);
                         }
@@ -599,7 +524,6 @@ const Offsetter = (() => {
     /**
      * Pretty-print the current stack state to the browser console.
      * Separated from recalculate() to keep the hot path free of string work.
-     * Nobody wants a receipt printed at every checkout — only when asked.
      *
      * @param {number} total
      * @param {number} scrollMargin
@@ -623,30 +547,28 @@ const Offsetter = (() => {
         console.groupEnd();
     }
 
+
     /**
-     * Smart state poller — the "virtual world" scanner.
+     * State poller — the "virtual world" scanner.
      *
      * Runs every config.statePollInterval ms (default 1000ms).
      * On each tick it reads the current offsetHeight of every registered
      * contributor and compares it to the cached value.
      *
      * If ANY height changed → recalculate() is called.
-     * If nothing changed   → no DOM write, no event dispatch. Truly zero cost.
+     * If nothing changed   → no DOM write, no event dispatch. Zero cost.
      *
-     * This is the safety net that catches everything ResizeObserver and
-     * transitionend might miss:
+     * This is the safety net that catches everything else:
      *   - display:none toggled by JS without a transition
-     *   - Visibility changes driven by scroll or intersection observers
-     *   - External scripts modifying contributor height behind our back
-     *   - Browser zoom level changes
+     *   - visibility changes driven by scroll or intersection
+     *   - external scripts changing contributor height
+     *   - browser zoom level changes
+     *   - any case where ResizeObserver or transitionend didn't fire
      *
      * "Virtual world" pattern:
-     *   snapshot(t)  = { role → cached height }
-     *   realWorld(t) = { role → offsetHeight from DOM }
+     *   snapshot(t)  = { role → height } from cache
+     *   realWorld(t) = { role → offsetHeight } from DOM
      *   if snapshot ≠ realWorld → sync and recalculate
-     *
-     * Like a smoke detector. Silent 99.9% of the time.
-     * But you're glad it's there.
      */
     function initStatePoller() {
         if (config.statePollInterval <= 0) return;
@@ -673,19 +595,15 @@ const Offsetter = (() => {
     }
 
     /**
-     * Attach a 'transitionend' listener on document via AbortController.
+     * Attach a single 'transitionend' listener on document.
      *
      * ResizeObserver fires on every frame during a transition — which is correct
      * for most cases. However, CSS transitions driven by properties that don't
-     * directly change offsetHeight (e.g. max-height collapse on a promo banner)
-     * might have their final value missed by RO.
+     * directly change offsetHeight (e.g. opacity, transform, visibility toggling
+     * that then releases layout space) can be missed.
      *
      * This listener fires exactly once per transition, only when the animated
      * element is (or is inside) a registered contributor — zero cost otherwise.
-     * Like a good intern: only speaks up when it's actually relevant.
-     *
-     * Cleanup strategy: listenerAC.abort() in destroy() removes this listener
-     * in a single call — no need to store a handler reference for later removal.
      *
      * Covers:
      *   - max-height collapse animations (promo banner dismiss)
@@ -693,15 +611,12 @@ const Offsetter = (() => {
      *   - Any future contributor with a CSS transition on its height
      */
     function initTransitionObserver() {
-        listenerAC = new AbortController();
-
-        // Handler is intentionally local — we don't need to store it.
-        // AbortController knows where it lives. Trust the system.
-        document.addEventListener('transitionend', (e) => {
+        transitionHandler = (e) => {
             if (e.target.closest('[data-offsetter-role]')) {
                 scheduleRecalculate();
             }
-        }, { signal: listenerAC.signal });
+        };
+        document.addEventListener('transitionend', transitionHandler);
     }
 
     return {
@@ -712,7 +627,6 @@ const Offsetter = (() => {
          * placed after all contributor elements in source order.
          *
          * Calling init() more than once is a no-op with a console warning.
-         * We've all had that coworker who hits "Send" five times just to be sure.
          *
          * @param {OffsetterOptions} [options={}]
          *
@@ -755,15 +669,13 @@ const Offsetter = (() => {
             // Catches display:none toggles, zoom changes, and anything RO/transitionend missed.
             initStatePoller();
 
-            // Final recalculate after full page load — web fonts and lazy-loaded images
-            // may change the header height after DOMContentLoaded fires.
-            // { once: true } = self-cleaning. No AbortController needed here.
+            // Final recalculate after full page load — web fonts and images may
+            // change the header height after DOMContentLoaded.
             window.addEventListener('load', recalculate, { once: true });
 
-            // Blind polling fallback — only if explicitly requested.
-            // Prefer transitionend + ResizeObserver + state poller for coverage with
-            // zero overhead. Enable via: Offsetter.init({ pollingInterval: 500 })
-            // But ask yourself why before you do it.
+            // Polling fallback — only if explicitly requested.
+            // Prefer transitionend + ResizeObserver for zero-overhead coverage.
+            // Enable via: Offsetter.init({ pollingInterval: 500 })
             if (config.pollingInterval > 0) {
                 pollingHandle = setInterval(recalculate, config.pollingInterval);
             }
@@ -774,7 +686,7 @@ const Offsetter = (() => {
          *
          * ResizeObserver handles the vast majority of cases automatically.
          * Use this method only for edge cases that ResizeObserver cannot detect:
-         *   - CSS animations (not transitions) that change an element's height.
+         *   - CSS animations that change an element's height over time.
          *   - Programmatic classList changes that alter padding/height without
          *     triggering a resize event (e.g. collapsing an accordion header).
          *   - After calling Offsetter.init({ watchMutations: false }) and manually
@@ -806,11 +718,11 @@ const Offsetter = (() => {
         /**
          * Return the current value of --offsetter-total as a plain number (px).
          * Equivalent to reading the CSS variable but avoids string parsing.
-         * Fast, synchronous, and it won't judge you for calling it a lot.
          *
          * @returns {number}
          *
          * @example
+         * // Compute a custom threshold without involving CSS.
          * const threshold = Offsetter.getTotal() + 8;
          */
         getTotal() {
@@ -824,13 +736,12 @@ const Offsetter = (() => {
         /**
          * Return the current value of --offsetter-scroll-margin as a plain number (px).
          * Use this in JavaScript scroll-spy logic instead of hardcoded thresholds.
-         * The number that makes your anchors land exactly where you want them —
-         * not hidden behind the nav bar like a shy intern at a company event.
          *
          * @returns {number}
          *
          * @example
-         * // Before: if (scrollY >= sectionTop - 150) activate(id);  // where did 150 come from?
+         * // Replace a hardcoded -150 threshold with a live value.
+         * // Before:  if (scrollY >= sectionTop - 150) activate(id);
          * // After:
          * if (scrollY >= sectionTop - Offsetter.getScrollMargin()) activate(id);
          */
@@ -844,7 +755,6 @@ const Offsetter = (() => {
          *
          * Use in single-page applications when the page component that owns the
          * sticky stack is unmounted. After destroy(), init() may be called again.
-         * It's a clean break. No hard feelings. The CSS variables are gone.
          *
          * @example
          * // React / Vue component teardown.
@@ -866,20 +776,15 @@ const Offsetter = (() => {
                 clearInterval(pollerHandle);
                 pollerHandle = null;
             }
-
-            // One abort() call removes the transitionend listener cleanly.
-            // No handler reference needed, no removeEventListener ceremony.
-            if (listenerAC !== null) {
-                listenerAC.abort();
-                listenerAC = null;
+            if (transitionHandler !== null) {
+                document.removeEventListener('transitionend', transitionHandler);
+                transitionHandler = null;
             }
-
             resizeObserver?.disconnect();
             mutationObserver?.disconnect();
             styleTag?.remove();
 
             // Reset all private state so init() can be called again.
-            // Wipe the slate. Factory reset. Marie Kondo the module.
             contributors.clear();
             resizeObserver   = null;
             mutationObserver = null;
@@ -904,6 +809,7 @@ const Offsetter = (() => {
          *   ├──────────────────┴──────────┴────────┴──────────┴──────────┤
          *   │ --offsetter-total:          118px                          │
          *   │ --offsetter-scroll-margin:  138px                          │
+         *   │ spyBuffer: 20px  │ watchMutations: true                    │
          *   └────────────────────────────────────────────────────────────┘
          *
          * @example
@@ -948,7 +854,6 @@ const Offsetter = (() => {
    If the DOM is already parsed (script placed at end of <body> or defer),
    initialise immediately. Otherwise wait for DOMContentLoaded.
    Never use async — scanDOM() must see the full DOM in source order.
-   Patience is a virtue. async is not, in this context.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 if (document.readyState === 'loading') {
@@ -962,16 +867,14 @@ if (document.readyState === 'loading') {
    GLOBAL EXPORT
    Attach to window for console debugging and cross-script access.
 
-   Available in DevTools at any time:
+   Available in DevTools:
      Offsetter.debug()
      Offsetter.getLayer('header')
      Offsetter.getTotal()
      Offsetter.getScrollMargin()
      Offsetter.recalculate()
-     Offsetter.destroy()
-
-   Yes, it's global. No, it's not a mistake. It's a singleton.
-   The design pattern, not the lifestyle choice.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 window.Offsetter = Offsetter;
+
+
